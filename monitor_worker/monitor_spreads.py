@@ -17,7 +17,6 @@ HEADERS = {
     "Accept": "application/json"
 }
 
-#POSITIONS_FILE = "open_positions.json"
 POSITIONS_FILE = os.path.join(os.path.dirname(__file__), "open_positions.json")
 
 # ✉️ Función para enviar alerta por Telegram
@@ -70,7 +69,6 @@ def get_option_price(symbol, expiration, strike, option_type):
         ):
             bid = opt.get("bid", 0.0)
             ask = opt.get("ask", 0.0)
-            # ⚠️ Esto es solo una estimación basada en precios publicados en Tradier, no en tu broker real
             return round((bid + ask) / 2, 2) if bid and ask else None
 
     return None
@@ -88,9 +86,13 @@ def evaluar_posiciones():
         print("ℹ️ No hay posiciones abiertas para monitorear.")
         return
 
+    alguna_activa = False
+
     for pos in posiciones:
         if pos.get("activo") is False:
             continue
+
+        alguna_activa = True
 
         symbol = pos["symbol"]
         expiration = pos["expiration"]
@@ -98,7 +100,6 @@ def evaluar_posiciones():
         long_strike = pos["long_strike"]
         entry_price = pos["entry_price"]
 
-        # ⚠️ Precios estimados únicamente para referencia
         short_price = get_option_price(symbol, expiration, short_strike, "put")
         long_price = get_option_price(symbol, expiration, long_strike, "put")
 
@@ -130,6 +131,9 @@ def evaluar_posiciones():
                 f"📈 <b>Ganancia estimada: {pnl_percent}%</b>"
             )
             send_telegram(mensaje)
+
+    if not alguna_activa:
+        print("ℹ️ No hay posiciones activas para monitorear.")
 
 if __name__ == "__main__":
     evaluar_posiciones()
