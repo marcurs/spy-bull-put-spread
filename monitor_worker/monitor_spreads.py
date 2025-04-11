@@ -17,7 +17,8 @@ HEADERS = {
     "Accept": "application/json"
 }
 
-POSITIONS_FILE = "open_positions.json"
+#POSITIONS_FILE = "open_positions.json"
+POSITIONS_FILE = os.path.join(os.path.dirname(__file__), "open_positions.json")
 
 # ✉️ Función para enviar alerta por Telegram
 def send_telegram(message):
