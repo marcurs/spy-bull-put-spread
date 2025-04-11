@@ -2,7 +2,7 @@ name: Monitor Spreads
 
 on:
   schedule:
-    - cron: '*/15 * * * *'  # Ejecuta cada 15 minutos (UTC)
+    - cron: '*/15 * * * *'  # Corre cada 15 minutos (UTC)
   workflow_dispatch:        # Permite ejecución manual desde GitHub
 
 jobs:
