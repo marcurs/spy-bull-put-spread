@@ -7,6 +7,8 @@ import os
 # 🔐 Cargar API Key desde archivo .env
 load_dotenv()
 TRADIER_API_TOKEN = os.getenv('TRADIER_API_KEY')
+TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
+TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
 BASE_URL = "https://api.tradier.com/v1"
 HEADERS = {
@@ -27,6 +29,20 @@ def mostrar_criterios():
     print("✔️  Mismo vencimiento para ambas patas")
     print("✔️  RSI diario entre 45 y 65")
     print("✔️  Precio > SMA 30 diario\n")
+
+def send_telegram(message):
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    payload = {
+        "chat_id": TELEGRAM_CHAT_ID,
+        "text": message,
+        "parse_mode": "HTML"
+    }
+    try:
+        response = requests.post(url, data=payload)
+        if response.status_code != 200:
+            print(f"⚠️ Error enviando mensaje a Telegram: {response.text}")
+    except Exception as e:
+        print(f"⚠️ Excepción al enviar a Telegram: {e}")
 
 def get_option_expirations(symbol="SPY"):
     url = f"{BASE_URL}/markets/options/expirations"
@@ -69,7 +85,6 @@ def build_spreads(options):
 def cumple_condiciones_tecnicas():
     print("🔎 Evaluando condiciones técnicas (RSI y SMA)...")
 
-    # Obtener precios diarios
     hist_url = f"{BASE_URL}/markets/history"
     hist_params = {"symbol": "SPY", "interval": "daily", "start": "2024-01-01"}
     hist_resp = requests.get(hist_url, headers=HEADERS, params=hist_params)
@@ -79,7 +94,6 @@ def cumple_condiciones_tecnicas():
     sma30 = daily_data['close'].rolling(window=30).mean().iloc[-1]
     precio_actual = daily_data['close'].iloc[-1]
 
-    # Calcular RSI diario
     delta = daily_data['close'].diff()
     gain = delta.clip(lower=0)
     loss = -delta.clip(upper=0)
@@ -113,6 +127,16 @@ def buscar_spreads_SPY():
         resultado = resultado.sort_values(by="credit", ascending=False)
         print("📊 OPORTUNIDADES DETECTADAS:\n")
         print(resultado.to_string(index=False))
+
+        # Enviar alerta por Telegram con resumen
+        top = resultado.iloc[0]
+        mensaje = (
+            f"📢 <b>Oportunidad SPY Bull Put Spread</b>\n"
+            f"📅 Expira: {top['expiration']}  ({top['dte']} DTE)\n"
+            f"📉 Short Put: {top['short_strike']} | 📈 Long Put: {top['long_strike']}\n"
+            f"💰 Crédito: ${top['credit']}  | 📊 Delta: {top['short_delta']}"
+        )
+        send_telegram(mensaje)
     else:
         print("❌ No se encontraron spreads que cumplan los criterios.")
 
