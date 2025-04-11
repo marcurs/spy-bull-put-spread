@@ -1,12 +1,32 @@
 services:
   - type: worker
-    name: spy-bull-put-spread-worker
+    name: spy-entry-worker
     runtime: python
     repo: https://github.com/tuusuario/spy-bull-put-spread.git
     plan: starter
     branch: main
     buildCommand: pip install -r requirements.txt
-    startCommand: python spy_bull_put_spread.py
+    startCommand: python entry_worker/spy_bull_put_spread.py
     envVars:
       - key: TRADIER_API_KEY
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
+        sync: false
+
+  - type: worker
+    name: spy-monitor-worker
+    runtime: python
+    repo: https://github.com/tuusuario/spy-bull-put-spread.git
+    plan: starter
+    branch: main
+    buildCommand: pip install -r requirements.txt
+    startCommand: python monitor_worker/monitor_spreads.py
+    envVars:
+      - key: TRADIER_API_KEY
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
         sync: false
