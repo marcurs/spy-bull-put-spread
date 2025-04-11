@@ -1,147 +1,132 @@
+import os
+import json
 import requests
 import pandas as pd
 from datetime import datetime
 from dotenv import load_dotenv
-import os
 
-# 🔐 Cargar API Key desde archivo .env
+# Cargar variables de entorno
 load_dotenv()
-TRADIER_API_TOKEN = os.getenv('TRADIER_API_KEY')
-TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
-TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
-BASE_URL = "https://api.tradier.com/v1"
+TRADIER_API_KEY = os.getenv("TRADIER_API_KEY")
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+
 HEADERS = {
-    'Authorization': f'Bearer {TRADIER_API_TOKEN}',
-    'Accept': 'application/json'
+    "Authorization": f"Bearer {TRADIER_API_KEY}",
+    "Accept": "application/json"
 }
 
-# 🎯 Mostrar criterios configurados
-def mostrar_criterios():
-    print("\n🔎 CRITERIOS DE FILTRADO PARA SPY BULL PUT SPREAD")
-    print("--------------------------------------------------")
-    print("✔️  Subyacente: SPY")
-    print("✔️  Tipo: Bull Put Spread (Short Put + Long Put)")
-    print("✔️  Delta pierna vendida: entre -0.22 y -0.28")
-    print("✔️  Ancho del spread: $5")
-    print("✔️  Crédito mínimo recibido: $0.75")
-    print("✔️  Días hasta vencimiento (DTE): entre 15 y 30 días")
-    print("✔️  Mismo vencimiento para ambas patas")
-    print("✔️  RSI diario entre 45 y 65")
-    print("✔️  Precio > SMA 30 diario\n")
-
-def send_telegram(message):
+# Enviar mensaje a Telegram
+def send_telegram(mensaje):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {
         "chat_id": TELEGRAM_CHAT_ID,
-        "text": message,
+        "text": mensaje,
         "parse_mode": "HTML"
     }
     try:
         response = requests.post(url, data=payload)
-        if response.status_code != 200:
-            print(f"⚠️ Error enviando mensaje a Telegram: {response.text}")
+        response.raise_for_status()
     except Exception as e:
-        print(f"⚠️ Excepción al enviar a Telegram: {e}")
+        print(f"❌ Error enviando mensaje a Telegram: {e}")
 
-def get_option_expirations(symbol="SPY"):
-    url = f"{BASE_URL}/markets/options/expirations"
-    params = {"symbol": symbol, "includeAllRoots": "true", "strikes": "false"}
-    response = requests.get(url, headers=HEADERS, params=params)
-    data = response.json()
-    return data['expirations']['date']
-
-def filter_expirations(expirations, min_days=15, max_days=30):
-    today = datetime.today().date()
-    return [d for d in expirations if min_days <= (datetime.strptime(d, "%Y-%m-%d").date() - today).days <= max_days]
-
-def get_option_chain(symbol, expiration):
-    url = f"{BASE_URL}/markets/options/chains"
-    params = {"symbol": symbol, "expiration": expiration, "greeks": "true"}
-    response = requests.get(url, headers=HEADERS, params=params)
-    data = response.json()
-    return data['options']['option']
-
-def build_spreads(options):
-    puts = [opt for opt in options if opt['option_type'] == 'put' and opt['greeks']]
-    spreads = []
-
-    for short in puts:
-        if abs(short['greeks']['delta']) < 0.28 and abs(short['greeks']['delta']) > 0.22:
-            for long in puts:
-                if long['strike'] == short['strike'] - 5 and long['expiration_date'] == short['expiration_date']:
-                    credit = short['bid'] - long['ask']
-                    if credit >= 0.75:
-                        spreads.append({
-                            "expiration": short["expiration_date"],
-                            "short_strike": short["strike"],
-                            "long_strike": long["strike"],
-                            "credit": round(credit, 2),
-                            "short_delta": round(short["greeks"]["delta"], 3),
-                            "dte": (datetime.strptime(short["expiration_date"], "%Y-%m-%d").date() - datetime.today().date()).days
-                        })
-    return pd.DataFrame(spreads)
-
+# Obtener RSI y SMA desde datos históricos de SPY
 def cumple_condiciones_tecnicas():
     print("🔎 Evaluando condiciones técnicas (RSI y SMA)...")
+    try:
+        r = requests.get("https://api.tradier.com/v1/markets/history",
+                         headers=HEADERS,
+                         params={"symbol": "SPY", "interval": "daily", "start": "2023-01-01"})
+        r.raise_for_status()
+        datos = r.json().get("history", {}).get("day", [])
+        df = pd.DataFrame(datos)
 
-    hist_url = f"{BASE_URL}/markets/history"
-    hist_params = {"symbol": "SPY", "interval": "daily", "start": "2024-01-01"}
-    hist_resp = requests.get(hist_url, headers=HEADERS, params=hist_params)
-    daily_data = pd.DataFrame(hist_resp.json()['history']['day'])
-    daily_data['close'] = daily_data['close'].astype(float)
+        if df.empty:
+            print("❌ No se encontraron datos de historial diario.")
+            return False
 
-    sma30 = daily_data['close'].rolling(window=30).mean().iloc[-1]
-    precio_actual = daily_data['close'].iloc[-1]
+        df["close"] = pd.to_numeric(df["close"])
+        df["sma_30"] = df["close"].rolling(window=30).mean()
+        delta = df["close"].diff()
+        gain = delta.clip(lower=0)
+        loss = -delta.clip(upper=0)
+        avg_gain = gain.rolling(window=14).mean()
+        avg_loss = loss.rolling(window=14).mean()
+        rs = avg_gain / avg_loss
+        df["rsi"] = 100 - (100 / (1 + rs))
 
-    delta = daily_data['close'].diff()
-    gain = delta.clip(lower=0)
-    loss = -delta.clip(upper=0)
-    avg_gain = gain.rolling(window=14).mean()
-    avg_loss = loss.rolling(window=14).mean()
-    rs = avg_gain / avg_loss
-    rsi = 100 - (100 / (1 + rs))
-    rsi_actual = rsi.iloc[-1]
+        rsi_actual = df.iloc[-1]["rsi"]
+        sma_actual = df.iloc[-1]["sma_30"]
+        precio_actual = df.iloc[-1]["close"]
 
-    print(f"📈 RSI diario actual: {rsi_actual:.2f}")
-    print(f"📉 Precio actual: ${precio_actual:.2f}")
-    print(f"📊 SMA 30 días: ${sma30:.2f}\n")
+        print(f"📊 RSI: {rsi_actual:.2f} | SMA 30: {sma_actual:.2f} | Precio: {precio_actual:.2f}")
 
-    return (45 < rsi_actual < 65) and (precio_actual > sma30)
+        return 45 < rsi_actual < 65 and precio_actual > sma_actual
+    except Exception as e:
+        print(f"❌ Error al evaluar condiciones técnicas: {e}")
+        return False
 
-def buscar_spreads_SPY():
-    mostrar_criterios()
-    expirations = get_option_expirations("SPY")
-    filtradas = filter_expirations(expirations)
+# Obtener cadena de opciones de SPY
+def get_option_chain():
+    try:
+        print("🔍 Obteniendo cadena de opciones...")
+        r = requests.get("https://api.tradier.com/v1/markets/options/chains",
+                         headers=HEADERS,
+                         params={"symbol": "SPY", "expiration": "2025-04-25"})
+        r.raise_for_status()
+        data = r.json().get("options", {}).get("option", [])
+        return pd.DataFrame(data)
+    except Exception as e:
+        print(f"❌ Error al obtener cadena de opciones: {e}")
+        return pd.DataFrame()
 
-    all_spreads = []
-
-    for fecha in filtradas:
-        chain = get_option_chain("SPY", fecha)
-        spreads_df = build_spreads(chain)
-        if not spreads_df.empty:
-            all_spreads.append(spreads_df)
-
-    if all_spreads:
-        resultado = pd.concat(all_spreads)
-        resultado = resultado.sort_values(by="credit", ascending=False)
-        print("📊 OPORTUNIDADES DETECTADAS:\n")
-        print(resultado.to_string(index=False))
-
-        # Enviar alerta por Telegram con resumen
-        top = resultado.iloc[0]
-        mensaje = (
-            f"📢 <b>Oportunidad SPY Bull Put Spread</b>\n"
-            f"📅 Expira: {top['expiration']}  ({top['dte']} DTE)\n"
-            f"📉 Short Put: {top['short_strike']} | 📈 Long Put: {top['long_strike']}\n"
-            f"💰 Crédito: ${top['credit']}  | 📊 Delta: {top['short_delta']}"
-        )
-        send_telegram(mensaje)
-    else:
-        print("❌ No se encontraron spreads que cumplan los criterios.")
+# Filtrar y construir spreads válidos
+def build_spreads(df):
+    try:
+        puts = df[(df["option_type"] == "put") & (df["expiration_date"] == "2025-04-25")]
+        spreads = []
+        for i, row in puts.iterrows():
+            delta = row.get("greeks", {}).get("delta", -1)
+            if not -0.28 <= delta <= -0.22:
+                continue
+            short_strike = row["strike"]
+            long_strike = short_strike - 5
+            long_leg = puts[puts["strike"] == long_strike]
+            if long_leg.empty:
+                continue
+            credit = round((row["bid"] - long_leg.iloc[0]["ask"]), 2)
+            if credit >= 0.75:
+                spreads.append({
+                    "short_strike": short_strike,
+                    "long_strike": long_strike,
+                    "credit": credit,
+                    "delta": delta
+                })
+        return pd.DataFrame(spreads)
+    except Exception as e:
+        print(f"❌ Error al construir spreads: {e}")
+        return pd.DataFrame()
 
 if __name__ == "__main__":
     if cumple_condiciones_tecnicas():
-        buscar_spreads_SPY()
+        chain = get_option_chain()
+        if chain.empty:
+            print("⚠️ No se encontraron opciones válidas.")
+        else:
+            resultado = build_spreads(chain)
+            if resultado.empty:
+                print("⚠️ No se encontraron spreads que cumplan criterios.")
+            else:
+                resultado = resultado.sort_values(by="credit", ascending=False)
+                print("✅ Spreads sugeridos:\n", resultado)
+                top = resultado.iloc[0]
+                mensaje = (
+                    f"📈 <b>Oportunidad Bull Put Spread SPY</b>\n"
+                    f"📉 Short: {top['short_strike']} | 📈 Long: {top['long_strike']}\n"
+                    f"💰 Crédito: ${top['credit']} | Δ: {round(top['delta'], 2)}\n"
+                    f"📅 Expira: 2025-04-25"
+                )
+                send_telegram(mensaje)
     else:
-        print("❌ No se cumplen las condiciones técnicas (RSI o SMA).")
+        print("❌ No se cumplen las condiciones técnicas.")
