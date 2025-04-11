@@ -1,0 +1,12 @@
+services:
+  - type: worker
+    name: spy-bull-put-spread-worker
+    runtime: python
+    repo: https://github.com/tuusuario/spy-bull-put-spread.git
+    plan: starter
+    branch: main
+    buildCommand: pip install -r requirements.txt
+    startCommand: python spy_bull_put_spread.py
+    envVars:
+      - key: TRADIER_API_KEY
+        sync: false
