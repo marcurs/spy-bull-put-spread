@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Gestión de Spreads Activos</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      background: #0d1117;
+      color: #c9d1d9;
+      padding: 2rem;
+    }
+    input, select, button {
+      padding: 0.4rem;
+      margin: 0.5rem;
+      background: #161b22;
+      color: #c9d1d9;
+      border: 1px solid #30363d;
+    }
+    .spread {
+      margin-bottom: 1.5rem;
+      padding: 1rem;
+      border: 1px solid #30363d;
+    }
+  </style>
+</head>
+<body>
+  <h1>📈 Gestor de Spreads Abiertos</h1>
+
+  <div id="spreads"></div>
+
+  <button onclick="addSpread()">➕ Agregar Spread</button>
+  <button onclick="exportJSON()">💾 Exportar a JSON</button>
+
+  <pre id="output"></pre>
+
+  <script>
+    let spreads = [];
+
+    function render() {
+      const container = document.getElementById("spreads");
+      container.innerHTML = "";
+      spreads.forEach((spread, i) => {
+        container.innerHTML += `
+          <div class="spread">
+            <label>Symbol <input value="${spread.symbol}" onchange="spreads[${i}].symbol=this.value" /></label>
+            <label>Expiration <input type="date" value="${spread.expiration}" onchange="spreads[${i}].expiration=this.value" /></label>
+            <label>Short Strike <input type="number" value="${spread.short_strike}" onchange="spreads[${i}].short_strike=parseFloat(this.value)" /></label>
+            <label>Long Strike <input type="number" value="${spread.long_strike}" onchange="spreads[${i}].long_strike=parseFloat(this.value)" /></label>
+            <label>Entry Price <input type="number" step="0.01" value="${spread.entry_price}" onchange="spreads[${i}].entry_price=parseFloat(this.value)" /></label>
+            <label>Contracts <input type="number" value="${spread.contracts}" onchange="spreads[${i}].contracts=parseInt(this.value)" /></label>
+            <label>Activo <select onchange="spreads[${i}].activo=this.value==='true'">
+              <option value="true" ${spread.activo ? 'selected' : ''}>true</option>
+              <option value="false" ${!spread.activo ? 'selected' : ''}>false</option>
+            </select></label>
+            <button onclick="removeSpread(${i})">🗑️ Eliminar</button>
+          </div>
+        `;
+      });
+    }
+
+    function addSpread() {
+      spreads.push({
+        symbol: "SPY",
+        expiration: "2025-04-25",
+        short_strike: 510,
+        long_strike: 505,
+        entry_price: 0.78,
+        contracts: 1,
+        activo: true
+      });
+      render();
+    }
+
+    function removeSpread(index) {
+      spreads.splice(index, 1);
+      render();
+    }
+
+    function exportJSON() {
+      const json = JSON.stringify(spreads, null, 2);
+      document.getElementById("output").textContent = json;
+    }
+
+    // Inicializa con un spread vacío
+    addSpread();
+  </script>
+</body>
+</html>
