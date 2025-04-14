@@ -29,3 +29,11 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           python entry_worker/spy_bull_put_spread.py
+
+      - name: Run spy_bear_call_spread.py
+        env:
+          TRADIER_API_KEY: ${{ secrets.TRADIER_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          python entry_worker/spy_bear_call_spread.py
