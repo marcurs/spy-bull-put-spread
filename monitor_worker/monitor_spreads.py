@@ -34,14 +34,10 @@ def send_telegram(message):
     except Exception as e:
         print(f"⚠️ Excepción al enviar a Telegram: {e}")
 
-# 📈 Consultar precio estimado del contrato usando midpoint (bid + ask)/2 de Tradier
+# 📈 Obtener precio midpoint de la opción (bid + ask)/2
 def get_option_price(symbol, expiration, strike, option_type):
     url = f"{BASE_URL}/markets/options/chains"
-    params = {
-        "symbol": symbol,
-        "expiration": expiration,
-        "greeks": "false"
-    }
+    params = {"symbol": symbol, "expiration": expiration, "greeks": "false"}
     response = requests.get(url, headers=HEADERS, params=params)
 
     try:
@@ -63,9 +59,9 @@ def get_option_price(symbol, expiration, strike, option_type):
 
     for opt in option_list:
         if (
-            opt["strike"] == strike
-            and opt["option_type"] == option_type
-            and opt["expiration_date"] == expiration
+            opt["strike"] == strike and
+            opt["option_type"] == option_type and
+            opt["expiration_date"] == expiration
         ):
             bid = opt.get("bid", 0.0)
             ask = opt.get("ask", 0.0)
@@ -73,7 +69,8 @@ def get_option_price(symbol, expiration, strike, option_type):
 
     return None
 
-# 🔍 Monitorear y evaluar condiciones desde archivo local
+# 🔍 Evaluar spreads abiertos desde archivo JSON
+
 def evaluar_posiciones():
     if not os.path.exists(POSITIONS_FILE):
         print("❌ No se encontró el archivo de posiciones abiertas.")
@@ -86,6 +83,7 @@ def evaluar_posiciones():
         print("ℹ️ No hay posiciones abiertas para monitorear.")
         return
 
+    hoy = datetime.today().date()
     alguna_activa = False
 
     for pos in posiciones:
@@ -96,38 +94,40 @@ def evaluar_posiciones():
 
         symbol = pos["symbol"]
         expiration = pos["expiration"]
+        option_type = pos.get("option_type", "put")  # "put" o "call"
         short_strike = pos["short_strike"]
         long_strike = pos["long_strike"]
         entry_price = pos["entry_price"]
 
-        short_price = get_option_price(symbol, expiration, short_strike, "put")
-        long_price = get_option_price(symbol, expiration, long_strike, "put")
+        short_price = get_option_price(symbol, expiration, short_strike, option_type)
+        long_price = get_option_price(symbol, expiration, long_strike, option_type)
 
         if short_price is None or long_price is None:
-            print(f"⚠️ No se pudo obtener precio para spread {symbol} {short_strike}/{long_strike}")
+            print(f"⚠️ No se pudo obtener precio para spread {symbol} {short_strike}/{long_strike} ({option_type})")
             continue
 
         current_value = round(short_price - long_price, 2)
         pnl_percent = round((entry_price - current_value) / entry_price * 100, 2)
+        dias_restantes = (datetime.strptime(expiration, "%Y-%m-%d").date() - hoy).days
 
-        print(f"📊 Spread {short_strike}/{long_strike} → Entrada: {entry_price} | Valor estimado: {current_value} | P&L estimado: {pnl_percent}%")
+        print(f"📊 Spread {short_strike}/{long_strike} ({option_type.upper()}) → Entrada: {entry_price} | Valor actual: {current_value} | PnL: {pnl_percent}% | DTE: {dias_restantes}")
 
         if pnl_percent <= -25:
             mensaje = (
-                f"📢 <b>ALERTA DE CIERRE SPREAD {symbol}</b>\n"
-                f"📅 Expira: {expiration}\n"
-                f"📉 Short Put: {short_strike} | 📈 Long Put: {long_strike}\n"
-                f"💰 Entrada: ${entry_price} | 🔴 Valor estimado: ${current_value}\n"
+                f"📢 <b>ALERTA DE CIERRE SPREAD {symbol} ({option_type.upper()})</b>\n"
+                f"📅 Expira: {expiration} (DTE: {dias_restantes})\n"
+                f"📉 Short: {short_strike} | Long: {long_strike}\n"
+                f"💰 Entrada: ${entry_price} | 🔴 Valor actual: ${current_value}\n"
                 f"📉 <b>Pérdida estimada: {pnl_percent}%</b>"
             )
             send_telegram(mensaje)
 
         elif pnl_percent >= 35:
             mensaje = (
-                f"📢 <b>ALERTA DE CIERRE SPREAD {symbol}</b>\n"
-                f"📅 Expira: {expiration}\n"
-                f"📉 Short Put: {short_strike} | 📈 Long Put: {long_strike}\n"
-                f"💰 Entrada: ${entry_price} | 🟢 Valor estimado: ${current_value}\n"
+                f"📢 <b>ALERTA DE CIERRE SPREAD {symbol} ({option_type.upper()})</b>\n"
+                f"📅 Expira: {expiration} (DTE: {dias_restantes})\n"
+                f"📉 Short: {short_strike} | Long: {long_strike}\n"
+                f"💰 Entrada: ${entry_price} | 🟢 Valor actual: ${current_value}\n"
                 f"📈 <b>Ganancia estimada: {pnl_percent}%</b>"
             )
             send_telegram(mensaje)

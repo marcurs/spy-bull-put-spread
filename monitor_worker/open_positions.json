@@ -5,7 +5,7 @@
       "short_strike": 510,
       "long_strike": 505,
       "entry_price": 0.78,
-      "contracts": 1,
+      "option_type": "call",
       "activo": false
     }
   ]

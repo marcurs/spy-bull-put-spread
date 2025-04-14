@@ -16,19 +16,17 @@ HEADERS = {
     'Accept': 'application/json'
 }
 
-# 🎯 Mostrar criterios configurados
 def mostrar_criterios():
-    print("\n🔎 CRITERIOS DE FILTRADO PARA SPY BULL PUT SPREAD")
+    print("\n🔎 CRITERIOS DE FILTRADO PARA SPY BEAR CALL SPREAD")
     print("--------------------------------------------------")
     print("✔️  Subyacente: SPY")
-    print("✔️  Tipo: Bull Put Spread (Short Put + Long Put)")
-    print("✔️  Delta pierna vendida: entre -0.22 y -0.28")
+    print("✔️  Tipo: Bear Call Spread (Short Call + Long Call)")
+    print("✔️  Delta pierna vendida: entre 0.22 y 0.28")
     print("✔️  Ancho del spread: $5")
     print("✔️  Crédito mínimo recibido: $0.75")
     print("✔️  Días hasta vencimiento (DTE): entre 15 y 30 días")
     print("✔️  Mismo vencimiento para ambas patas")
-    print("✔️  RSI diario entre 45 y 65")
-    print("✔️  Precio > SMA 30 diario\n")
+    print("✔️  RSI diario > 65 y Precio < SMA 30 diario\n")
 
 def send_telegram(message):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
@@ -63,13 +61,13 @@ def get_option_chain(symbol, expiration):
     return data['options']['option']
 
 def build_spreads(options):
-    puts = [opt for opt in options if opt['option_type'] == 'put' and opt['greeks']]
+    calls = [opt for opt in options if opt['option_type'] == 'call' and opt['greeks']]
     spreads = []
 
-    for short in puts:
-        if abs(short['greeks']['delta']) < 0.28 and abs(short['greeks']['delta']) > 0.22:
-            for long in puts:
-                if long['strike'] == short['strike'] - 5 and long['expiration_date'] == short['expiration_date']:
+    for short in calls:
+        if 0.22 <= short['greeks']['delta'] <= 0.28:
+            for long in calls:
+                if long['strike'] == short['strike'] + 5 and long['expiration_date'] == short['expiration_date']:
                     credit = short['bid'] - long['ask']
                     if credit >= 0.75:
                         spreads.append({
@@ -81,21 +79,6 @@ def build_spreads(options):
                             "dte": (datetime.strptime(short["expiration_date"], "%Y-%m-%d").date() - datetime.today().date()).days
                         })
     return pd.DataFrame(spreads)
-
-def vix_en_rango(min_vix=12, max_vix=25):
-    print("🔍 Verificando nivel de VIX actual...")
-    vix_url = f"{BASE_URL}/markets/quotes"
-    vix_params = {"symbols": "VIX"}
-    try:
-        response = requests.get(vix_url, headers=HEADERS, params=vix_params)
-        vix_data = response.json()
-        vix = float(vix_data['quotes']['quote']['last'])
-        print(f"📊 VIX actual: {vix:.2f}")
-        return min_vix <= vix <= max_vix
-    except Exception as e:
-        print(f"⚠️ Error al obtener el VIX: {e}")
-        return False  # Prevención por defecto
-
 
 def cumple_condiciones_tecnicas():
     print("🔎 Evaluando condiciones técnicas (RSI y SMA)...")
@@ -122,7 +105,22 @@ def cumple_condiciones_tecnicas():
     print(f"📉 Precio actual: ${precio_actual:.2f}")
     print(f"📊 SMA 30 días: ${sma30:.2f}\n")
 
-    return (45 < rsi_actual < 65) and (precio_actual > sma30)
+    return (rsi_actual > 65) and (precio_actual < sma30)
+
+def vix_en_rango(min_vix=15, max_vix=25):
+    print("🔍 Verificando nivel de VIX actual...")
+    vix_url = f"{BASE_URL}/markets/quotes"
+    vix_params = {"symbols": "VIX"}
+    try:
+        response = requests.get(vix_url, headers=HEADERS, params=vix_params)
+        vix_data = response.json()
+        vix = float(vix_data['quotes']['quote']['last'])
+        print(f"📊 VIX actual: {vix:.2f}")
+        return min_vix <= vix <= max_vix
+    except Exception as e:
+        print(f"⚠️ Error al obtener el VIX: {e}")
+        return False
+
 
 def buscar_spreads_SPY():
     mostrar_criterios()
@@ -146,9 +144,9 @@ def buscar_spreads_SPY():
         # Enviar alerta por Telegram con resumen
         top = resultado.iloc[0]
         mensaje = (
-            f"📢 <b>Oportunidad SPY Bull Put Spread</b>\n"
+            f"📢 <b>Oportunidad SPY Bear Call Spread</b>\n"
             f"📅 Expira: {top['expiration']}  ({top['dte']} DTE)\n"
-            f"📉 Short Put: {top['short_strike']} | 📈 Long Put: {top['long_strike']}\n"
+            f"📈 Short Call: {top['short_strike']} | 📉 Long Call: {top['long_strike']}\n"
             f"💰 Crédito: ${top['credit']}  | 📊 Delta: {top['short_delta']}"
         )
         send_telegram(mensaje)
@@ -160,7 +158,6 @@ if __name__ == "__main__":
         if cumple_condiciones_tecnicas():
             buscar_spreads_SPY()
         else:
-            print("❌ No se cumplen las condiciones técnicas (RSI o SMA).")
+            print("❌ No se cumplen las condiciones técnicas (RSI > 65 y Precio < SMA 30).")
     else:
-        print("❌ Nivel de VIX fuera de rango (> 12 y < 25). No se ejecutan spreads.")
-
+        print("❌ Nivel de VIX fuera de rango (15 - 25). No se ejecuta la estrategia.")
