@@ -1,12 +1,22 @@
 [
-    {
-      "symbol": "SPY",
-      "expiration": "2025-04-25",
-      "short_strike": 510,
-      "long_strike": 505,
-      "entry_price": 0.78,
-      "option_type": "call",
-      "activo": false
-    }
-  ]
+  {
+    "symbol": "SPY",
+    "expiration": "2025-04-25",
+    "short_strike": 515,
+    "long_strike": 510,
+    "entry_price": 0.90,
+    "option_type": "put",
+    "activo": false
+  },
+  {
+    "symbol": "SPY",
+    "expiration": "2025-04-25",
+    "short_strike": 550,
+    "long_strike": 555,
+    "entry_price": 0.85,
+    "option_type": "call",
+    "activo": false
+  }
+]
+
   
