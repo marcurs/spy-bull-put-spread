@@ -34,28 +34,28 @@ def send_telegram(message):
     except Exception as e:
         print(f"⚠️ Excepción al enviar a Telegram: {e}")
 
-# 📈 Obtener precio midpoint de la opción (bid + ask)/2
-def get_option_price(symbol, expiration, strike, option_type):
+# 📈 Obtener precio midpoint y delta de la opción
+def get_option_price_and_delta(symbol, expiration, strike, option_type):
     url = f"{BASE_URL}/markets/options/chains"
-    params = {"symbol": symbol, "expiration": expiration, "greeks": "false"}
+    params = {"symbol": symbol, "expiration": expiration, "greeks": "true"}
     response = requests.get(url, headers=HEADERS, params=params)
 
     try:
         if response.status_code != 200:
             print(f"❌ Error {response.status_code} consultando {symbol}: {response.text}")
-            return None
+            return None, None
 
         data = response.json()
         options = data.get("options")
         if options is None:
             print(f"⚠️ Tradier devolvió 'options: null' para {symbol} {expiration}. Verifica que la fecha y strikes existan.")
-            return None
+            return None, None
 
         option_list = options.get("option", [])
     except Exception as e:
         print(f"❌ Error al procesar JSON de respuesta para {symbol} {strike}: {e}")
         print(f"Contenido crudo:\n{response.text}")
-        return None
+        return None, None
 
     for opt in option_list:
         if (
@@ -65,12 +65,13 @@ def get_option_price(symbol, expiration, strike, option_type):
         ):
             bid = opt.get("bid", 0.0)
             ask = opt.get("ask", 0.0)
-            return round((bid + ask) / 2, 2) if bid and ask else None
+            midpoint = round((bid + ask) / 2, 2) if bid and ask else None
+            delta = opt.get("greeks", {}).get("delta", None)
+            return midpoint, delta
 
-    return None
+    return None, None
 
 # 🔍 Evaluar spreads abiertos desde archivo JSON
-
 def evaluar_posiciones():
     if not os.path.exists(POSITIONS_FILE):
         print("❌ No se encontró el archivo de posiciones abiertas.")
@@ -99,8 +100,8 @@ def evaluar_posiciones():
         long_strike = pos["long_strike"]
         entry_price = pos["entry_price"]
 
-        short_price = get_option_price(symbol, expiration, short_strike, option_type)
-        long_price = get_option_price(symbol, expiration, long_strike, option_type)
+        short_price, short_delta = get_option_price_and_delta(symbol, expiration, short_strike, option_type)
+        long_price, _ = get_option_price_and_delta(symbol, expiration, long_strike, option_type)
 
         if short_price is None or long_price is None:
             print(f"⚠️ No se pudo obtener precio para spread {symbol} {short_strike}/{long_strike} ({option_type})")
@@ -110,24 +111,26 @@ def evaluar_posiciones():
         pnl_percent = round((entry_price - current_value) / entry_price * 100, 2)
         dias_restantes = (datetime.strptime(expiration, "%Y-%m-%d").date() - hoy).days
 
-        print(f"📊 Spread {short_strike}/{long_strike} ({option_type.upper()}) → Entrada: {entry_price} | Valor actual: {current_value} | PnL: {pnl_percent}% | DTE: {dias_restantes}")
+        print(f"📊 Spread {short_strike}/{long_strike} ({option_type.upper()}) → Entrada: {entry_price} | Valor actual: {current_value} | PnL: {pnl_percent}% | Delta: {short_delta} | DTE: {dias_restantes}")
 
-        if pnl_percent <= -25:
+        # 📈 Alerta por Delta en rango
+        if short_delta is not None and -0.40 <= short_delta <= -0.35:
             mensaje = (
-                f"📢 <b>ALERTA DE CIERRE SPREAD {symbol} ({option_type.upper()})</b>\n"
+                f"📢 <b>ALERTA DELTA SPREAD {symbol} ({option_type.upper()})</b>\n"
                 f"📅 Expira: {expiration} (DTE: {dias_restantes})\n"
-                f"📉 Short: {short_strike} | Long: {long_strike}\n"
-                f"💰 Entrada: ${entry_price} | 🔴 Valor actual: ${current_value}\n"
-                f"📉 <b>Pérdida estimada: {pnl_percent}%</b>"
+                f"📉 Short Strike: {short_strike} | Long Strike: {long_strike}\n"
+                f"💰 Entrada: ${entry_price} | Valor actual: ${current_value}\n"
+                f"🎯 Delta short: {short_delta:.2f}"
             )
             send_telegram(mensaje)
 
+        # 📈 Alerta por Ganancia alta
         elif pnl_percent >= 35:
             mensaje = (
-                f"📢 <b>ALERTA DE CIERRE SPREAD {symbol} ({option_type.upper()})</b>\n"
+                f"📢 <b>ALERTA GANANCIA SPREAD {symbol} ({option_type.upper()})</b>\n"
                 f"📅 Expira: {expiration} (DTE: {dias_restantes})\n"
-                f"📉 Short: {short_strike} | Long: {long_strike}\n"
-                f"💰 Entrada: ${entry_price} | 🟢 Valor actual: ${current_value}\n"
+                f"📉 Short Strike: {short_strike} | Long Strike: {long_strike}\n"
+                f"💰 Entrada: ${entry_price} | Valor actual: ${current_value}\n"
                 f"📈 <b>Ganancia estimada: {pnl_percent}%</b>"
             )
             send_telegram(mensaje)
