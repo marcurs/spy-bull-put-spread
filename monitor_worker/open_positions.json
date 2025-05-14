@@ -1,10 +1,10 @@
 [
   {
-    "symbol": "DPZ",
-    "expiration": "2025-05-30",
-    "short_strike": 455,
-    "long_strike": 450,
-    "entry_price": 0.52,
+    "symbol": "INTC",
+    "expiration": "2025-06-20",
+    "short_strike": 20,
+    "long_strike": 19,
+    "entry_price": 0.63,
     "option_type": "put",
     "activo": true
   },
