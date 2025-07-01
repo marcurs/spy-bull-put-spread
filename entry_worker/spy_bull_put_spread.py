@@ -160,7 +160,7 @@ if __name__ == "__main__":
         if cumple_condiciones_tecnicas():
             buscar_spreads_SPY()
         else:
-            print("❌ No se cumplen las condiciones técnicas (RSI o SMA).")
+            print("❌ No se cumplen las condiciones técnicas (RSI > 65 y Precio < SMA 30).")
     else:
         print("❌ Nivel de VIX fuera de rango (> 12 y < 25). No se ejecutan spreads.")
 
