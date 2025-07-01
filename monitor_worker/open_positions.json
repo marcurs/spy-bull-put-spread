@@ -1,10 +1,10 @@
 [
   {
-    "symbol": "GOOG",
-    "expiration": "2025-07-11",
-    "short_strike": 165,
-    "long_strike": 160,
-    "entry_price": 0.77,
+    "symbol": "SPY",
+    "expiration": "2025-07-31",
+    "short_strike": 590,
+    "long_strike": 585,
+    "entry_price": 0.51,
     "option_type": "put",
     "activo": true
   },
