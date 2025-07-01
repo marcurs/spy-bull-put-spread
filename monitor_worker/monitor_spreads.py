@@ -125,7 +125,7 @@ def evaluar_posiciones():
             send_telegram(mensaje)
 
         # 📈 Alerta por Ganancia alta
-        elif pnl_percent >= 35:
+        elif pnl_percent >= 75:
             mensaje = (
                 f"📢 <b>ALERTA GANANCIA SPREAD {symbol} ({option_type.upper()})</b>\n"
                 f"📅 Expira: {expiration} (DTE: {dias_restantes})\n"
